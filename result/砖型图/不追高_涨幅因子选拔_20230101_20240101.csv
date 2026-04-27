@@ -1,0 +1,9 @@
+﻿策略名称,chasing_ratio,bc_raise_trend,bc_overyellow,bc_no_upper_shadow,bc_no_lower_shadow,bc_undumping,bc_raise_active_cap,bc_nochase,sc_quick_leave_buy_price,sc_dumping,sc_4_red,start_date,交易次数,盈利次数,亏损次数,单次交易胜率(%),平均单笔交易收益率(%),平均持仓时间,持仓一天收益率(%)
+砖型图,0.15,True,True,True,False,False,False,True,True,True,True,20230101,338,224,114,66.27,3.6303,1.88,1.93
+砖型图,0.12,True,True,True,False,False,False,True,True,True,True,20230101,293,205,88,69.97,4.1868,1.98,2.11
+砖型图,0.1,True,True,True,False,False,False,True,True,True,True,20230101,266,184,82,69.17,4.3453,2.04,2.13
+砖型图,0.09,True,True,True,False,False,False,True,True,True,True,20230101,251,177,74,70.52,4.47,2.07,2.16
+砖型图,0.08,True,True,True,False,False,False,True,True,True,True,20230101,206,149,57,72.33,4.2387,2.07,2.04
+砖型图,0.07,True,True,True,False,False,False,True,True,True,True,20230101,165,121,44,73.33,4.5186,2.06,2.19
+砖型图,0.06,True,True,True,False,False,False,True,True,True,True,20230101,119,93,26,78.15,5.3221,2.12,2.51
+砖型图,0.05,True,True,True,False,False,False,True,True,True,True,20230101,87,66,21,75.86,5.8313,2.1,2.77
