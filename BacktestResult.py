@@ -21,6 +21,8 @@ class BacktestResult(object):
     all_durations = []
     # 根据涨幅分层统计
     all_pnls_bucket = {}
+    # 成交日期
+    trade_date_set = set()
 
     def __init__(self):
         self.symbol = ""
@@ -32,7 +34,7 @@ class BacktestResult(object):
         self.all_durations = []
         self.all_pnls_bucket = []
 
-    def build(total_trade, win_trade, lose_trade, avg_duration, precise_avg_pnl, all_pnls=[], all_durations=[], all_pnls_bucket={}):
+    def build(total_trade, win_trade, lose_trade, avg_duration, precise_avg_pnl, all_pnls=[], all_durations=[], all_pnls_bucket={},trade_date_set=set()):
         result = BacktestResult()
         result.total_trade = total_trade
         result.win_trade = win_trade
@@ -43,6 +45,7 @@ class BacktestResult(object):
         result.all_pnls = all_pnls
         result.all_durations = all_durations
         result.all_pnls_bucket = all_pnls_bucket
+        result.trade_date_set = trade_date_set
         return result
 
     def show(self):

@@ -64,6 +64,7 @@ def run_backtest(strategy, file_path, symbol, start_date, end_date, config_list=
         all_pnl_details = strat.trade_pnl_list
         all_durations = strat.trade_duration_list
         pnl_bucket = strat.pnl_bucket
+        trade_date_set = strat.trade_date_set
 
         result = BacktestResult.build(
             trades.total.closed if "total" in trades and "closed" in trades.total else 0, 
@@ -73,7 +74,8 @@ def run_backtest(strategy, file_path, symbol, start_date, end_date, config_list=
             precise_avg_pnl = precise_avg_pnl,
             all_pnls = all_pnl_details,
             all_durations = all_durations,
-            all_pnls_bucket = pnl_bucket
+            all_pnls_bucket = pnl_bucket,
+            trade_date_set = trade_date_set
         )
 
         if log_detail:
@@ -85,7 +87,7 @@ def batch_backtest(strategy, data_dir="stock_data_5y", start_date="20250101", en
     """批量处理文件夹下所有股票"""
     files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
     # files = [i for i in files if "002085" in i]
-    # files = files[0:100]
+    # files = files[0:50]
     print("开始日期：" + start_date + "，结束日期：" + end_date)
     print("策略名称：" + strategy.strategy_name)
     print("一共回测策略数量：" + str(len(config_list)))
@@ -96,11 +98,13 @@ def batch_backtest(strategy, data_dir="stock_data_5y", start_date="20250101", en
     final_stock_result_list = []
     final_result_list = []
     final_pnl_bucket_list = []
+    final_trade_date_list = []
     for i in range(len(config_list)):
         final_all_pnls_list.append([])
         final_durations_list.append([])
         final_stock_result_list.append([])
         final_pnl_bucket_list.append({})
+        final_trade_date_list.append(set())
 
     for j, filename in enumerate(files):
         symbol = filename.replace('.csv', '')
@@ -116,11 +120,13 @@ def batch_backtest(strategy, data_dir="stock_data_5y", start_date="20250101", en
                 # 记录单只股票回测明细
                 stock_result_list = final_stock_result_list[i]
                 pnl_bucket = final_pnl_bucket_list[i]
+                trade_date_set = final_trade_date_list[i]
 
                 result = symbol_result_list[i]
                 if result is not None:
                     global_all_pnls.extend(result.all_pnls)
                     global_durations.extend(result.all_durations)
+                    trade_date_set.update(result.trade_date_set)
 
                     item = {"股票代码": symbol}
                     item["交易次数"] = result.total_trade
@@ -151,6 +157,7 @@ def batch_backtest(strategy, data_dir="stock_data_5y", start_date="20250101", en
         global_durations = final_durations_list[i]
         # 记录单只股票回测明细
         stock_result_list = final_stock_result_list[i]
+        trade_date_set = final_trade_date_list[i]
 
         total_trades_count = len(global_all_pnls)
         avg_pnl = (sum(global_all_pnls) / total_trades_count) if total_trades_count > 0 else 0
@@ -168,19 +175,20 @@ def batch_backtest(strategy, data_dir="stock_data_5y", start_date="20250101", en
 
         print("\n回测结果：")
         print(f"交易次数： {total_trades_count} 次  盈利次数： {len(win_pnl)} 次  亏损次数： {len(loss_pnl)} 次")
+        print(f"参与交易天数:{len(trade_date_set)}天")
         print(f"单次交易胜率: {win_rate*100:.2f}%")
         print(f"平均单笔交易收益率: {avg_pnl:.4f}%")
         print(f"平均持仓时间: {avg_duration:.2f} 天")
         print(f"持仓一天收益率: {day_profit_pct:.4f}%")
         print('====================================================================================')
 
-        # print("买入涨幅分层统计结果：")
-        # bucket = final_pnl_bucket_list[i]
-        # for k, v in sorted(bucket.items()):
-        #     if not v:
-        #         continue
-        #     avg_bucket_pct = (sum(v) / len(v))
-        #     print(f"涨幅:{k}%，总交易数:{len(v)}，收益率:{avg_bucket_pct:.2f}%")
+        print("买入涨幅分层统计结果：")
+        bucket = final_pnl_bucket_list[i]
+        for k, v in sorted(bucket.items()):
+            if not v:
+                continue
+            avg_bucket_pct = (sum(v) / len(v))
+            print(f"涨幅:{k}%，总交易数:{len(v)}，收益率:{avg_bucket_pct:.2f}%")
 
         if save_result:
             file_name = [strategy.strategy_name, start_date, end_date]
@@ -237,20 +245,32 @@ def backtest_all_config(strategy, test_name='', config_list=[{}], start_date="20
         item["持仓一天收益率(%)"] = round(day_profit_pct, 2)
         final_result_list.append(item)
 
-    df_results = pd.DataFrame(final_result_list)
-    df_results.sort_values(by="平均单笔交易收益率(%)", ascending=False)
-    file_name = [test_name, start_date, end_date]
-    file_name = "result\\" + strategy.strategy_name+"\\" + "_".join(file_name) + ".csv"
-    df_results.to_csv(file_name, index=False, encoding='utf_8_sig')
+    # df_results = pd.DataFrame(final_result_list)
+    # df_results.sort_values(by="平均单笔交易收益率(%)", ascending=False)
+    # file_name = [test_name, start_date, end_date]
+    # file_name = "result\\" + strategy.strategy_name+"\\" + "_".join(file_name) + ".csv"
+    # df_results.to_csv(file_name, index=False, encoding='utf_8_sig')
 
 if __name__ == '__main__':
-    backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20250101", end_date="20260101", config_list=ZHUAN_BC_CONFIG_LIST)
-    backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20240101", end_date="20250101", config_list=ZHUAN_BC_CONFIG_LIST)
-    backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20230101", end_date="20240101", config_list=ZHUAN_BC_CONFIG_LIST)
-    backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20220101", end_date="20230101", config_list=ZHUAN_BC_CONFIG_LIST)
-    # config_1 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': True, "bc_no_lower_shadow": False, 'sc_4_red': True, 'sc_dumping': False, 'sc_quick_leave_buy_price': True}
+    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20250101", end_date="20260101", config_list=ZHUAN_BC_CONFIG_LIST)
+    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20240101", end_date="20250101", config_list=ZHUAN_BC_CONFIG_LIST)
+    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20230101", end_date="20240101", config_list=ZHUAN_BC_CONFIG_LIST)
+    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20220101", end_date="20230101", config_list=ZHUAN_BC_CONFIG_LIST)
+    # # config_1 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': True, "bc_no_lower_shadow": False, 'sc_4_red': True, 'sc_dumping': False, 'sc_quick_leave_buy_price': True}
     # config_2 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': False, "bc_no_lower_shadow": False, 'sc_4_red': False, 'sc_dumping': True, "sc_quick_leave_buy_price": True}
-    # backtest_all_config(ZhuAnStrategy, start_date="20250101", end_date="20260417", config_list=[config_2])
+    config_2 = {
+        "bc_raise_trend": True, 
+        "bc_overyellow": True, 
+        'bc_no_upper_shadow': True, 
+        "bc_no_lower_shadow": False,
+        "bc_undumping": False,
+        "bc_raise_active_cap": False,
+        "bc_nochase": True,
+        "sc_quick_leave_buy_price": True,
+        "sc_dumping": True,
+        "sc_4_red": True
+    }
+    backtest_all_config(ZhuAnStrategy, test_name='临时测试', start_date="20250101", end_date="20260417", config_list=[config_2])
     # start("002766", start_date="20220101", end_date="20260401")
     # 请确保 data_dir 指向你下载 CSV 的文件夹
     # for config in ZHUAN_BC_CONFIG_LIST:
@@ -259,4 +279,4 @@ if __name__ == '__main__':
     # batch_backtest(strategy=ZhuAnStrategy, data_dir="stock_data_5y", start_date="20220101", end_date="20250101", config=config)
     # config={"log_open": True, "bc_raise_active_cap": True, 'bc_no_upper_shadow': True, 'bc_no_lower_shadow': True}
     # config_2["log_open"] = True
-    # run_backtest(ZhuAnStrategy, "stock_data_5y/600744.csv", "600744", start_date="20250101", end_date="20260417", config_list=[config_2])
+    # run_backtest(ZhuAnStrategy, "stock_data_5y/688205.csv", "688205", start_date="20250101", end_date="20260417", config_list=[config_2])

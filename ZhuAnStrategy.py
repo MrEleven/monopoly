@@ -125,6 +125,7 @@ class ZhuAnStrategy(bt.Strategy):
         self.trade_pnl_list = []  # 记录每一笔交易的百分比收益率
         self.trade_duration_list = [] # 记录每一笔交易的持仓天数
         self.pnl_bucket = {}
+        self.trade_date_set = set() # 记录每一笔成交的日期
 
     def next(self):
         # --- 新增：日期拦截逻辑 ---
@@ -278,7 +279,7 @@ class ZhuAnStrategy(bt.Strategy):
 
             if self.params.bc_no_upper_shadow or self.params.bc_no_lower_shadow:
                 # K线总长度
-                body = abs(self.data.high[0] - self.data.low[0])
+                body = abs(self.data.close[0] - self.data.open[0])
                 # 十字星K线不做
                 if body == 0:
                     return
@@ -302,8 +303,6 @@ class ZhuAnStrategy(bt.Strategy):
                 # 定义三类形态的布尔值
                 is_n_shape = self._check_n_shape()          # N型起跳
                 current_date = self.data.datetime.date(0).strftime('%Y%m%d')
-                # if current_date == "20260224":
-                #     pdb.set_trace()
                 is_flat_jump = self._check_flat_jump()      # 横盘起跳
                 is_trend_cont = self._check_trend_cont()    # 升波段延续
 
@@ -328,10 +327,10 @@ class ZhuAnStrategy(bt.Strategy):
 
                     # 记录涨幅
                     self.buy_price_change = (self.data.close[0] - self.data.close[-1]) * 100 // self.data.close[-1]
+                    self.trade_date_set.add(current_date)
 
     # --- 形态 A：N型起跳 ---
     def _check_n_shape(self):
-        # return False
         # 可选条件：
         # 股价连续4天下跌
         # 股价连续3天下跌
