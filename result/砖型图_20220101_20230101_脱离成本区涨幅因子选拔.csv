@@ -1,0 +1,6 @@
+﻿策略名称,leave_buy_price_ratio,bc_raise_trend,bc_overyellow,bc_no_upper_shadow,bc_no_lower_shadow,bc_undumping,bc_raise_active_cap,bc_nochase,sc_quick_leave_buy_price,sc_dumping,sc_4_red,start_date,交易次数,盈利次数,亏损次数,单次交易胜率(%),平均单笔交易收益率(%),平均持仓时间,持仓一天收益率(%)
+砖型图,0.01,True,True,True,False,False,False,False,True,True,True,20220101,339,185,154,54.57,3.5123,2.08,1.69
+砖型图,0.02,True,True,True,False,False,False,False,True,True,True,20220101,339,195,144,57.52,3.5179,1.97,1.78
+砖型图,0.03,True,True,True,False,False,False,False,True,True,True,20220101,339,206,133,60.77,3.592,1.87,1.92
+砖型图,0.04,True,True,True,False,False,False,False,True,True,True,20220101,339,211,128,62.24,3.5839,1.77,2.02
+砖型图,0.05,True,True,True,False,False,False,False,True,True,True,20220101,339,217,122,64.01,3.584,1.6,2.24

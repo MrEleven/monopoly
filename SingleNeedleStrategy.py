@@ -8,70 +8,8 @@ from ZhuAnIndicator import ZhuAnIndicator
 from ActiveCapIndicator import in_active_cap_raise
 import itertools
 
-# 定义所有布尔型参数的名称
-condition_keys = [
-    # 'bc_raise_trend', 
-    # 'bc_overyellow', 
-    # 'bc_no_upper_shadow', 
-    # 'bc_no_lower_shadow',
-    # 'bc_undumping',
-    # 'sc_quick_leave_buy_price',
-    # 'sc_4_red',
-    # 'sc_dumping',
-    # 'bc_nochase',
-]       
 
-base_config = {
-    "bc_raise_trend": True, 
-    "bc_overyellow": True, 
-    'bc_no_upper_shadow': True, 
-    "bc_no_lower_shadow": False,
-    "bc_undumping": False,
-    "bc_raise_active_cap": False,
-    "bc_nochase": True,
-    "sc_quick_leave_buy_price": True,
-    "sc_dumping": True,
-    "sc_4_red": True
-}
-
-# 生成所有 True/False 的组合 (2^6 = 64种)
-combinations = list(itertools.product([True, False], repeat=len(condition_keys)))
-
-ZHUAN_BC_CONFIG_LIST = []
-for chasing_ratio in [0.15, 0.12, 0.1, 0.09, 0.08, 0.07, 0.06, 0.05]:
-    config = {"chasing_ratio": chasing_ratio}
-    config.update(base_config)
-    ZHUAN_BC_CONFIG_LIST.append(config)
-
-
-
-# 将组合转化为字典列表
-# ZHUAN_BC_CONFIG_LIST = []
-# for combo in combinations:
-#     # dict(zip(...)) 是将 key 和对应的 True/False 值关联起来
-#     config = dict(zip(condition_keys, combo))
-#     config.update(base_config)
-#     ZHUAN_BC_CONFIG_LIST.append(config)
-
-def get_limit_price(prev_close, stock_name):
-    """
-    根据代码识别板块并判断今日收盘是否封死涨跌停
-    """
-    # 识别板块比例（主板10%，双创20%，北交30%）
-    if stock_name.startswith(('688', '30')): 
-        limit_ratio = 0.20
-    elif stock_name.startswith(('8', '4')): 
-        limit_ratio = 0.30
-    else: 
-        limit_ratio = 0.10
-
-    # 计算理论涨跌停价（精确到分）
-    limit_up_price = round(prev_close * (1 + limit_ratio) + 0.0001, 2)
-    limit_down_price = round(prev_close * (1 - limit_ratio) + 0.0001, 2)
-    return limit_up_price, limit_down_price
-
-
-class ZhuAnStrategy(bt.Strategy):
+class SingleNeedleStrategy(bt.Strategy):
     # 此策略需要开启CheatOnClose模式
     strategy_name = "砖型图"
     cheat_on_close = True
@@ -79,25 +17,8 @@ class ZhuAnStrategy(bt.Strategy):
         ('percents', 0.98),
         ('log_open', False), # 挂单价格：收盘价上浮 2%
         ('start_date', None),
-        ('upper_shadow_ratio', 0.6), # 上影线/实体比例
-        ('lower_shadow_ratio', 0.9), # 上影线/实体比例
-        ('vol_period', 30),
-        ('leave_buy_price_ratio', 0.03),
-        ('chasing_ratio', 0.08), # 追高比例
-
-        # 对单笔交易收益率有提升帮助的是:活跃市值，长上影，长下影
-        # 对单笔交易收益率起反向作用的是：上涨趋势，黄线之上，非放量出货
-        ('bc_raise_trend', False), # 上升趋势才买
-        ('bc_overyellow', False),   # 股价在黄线之上
-        ('bc_no_upper_shadow', False), # 不能有长上影线
-        ('bc_no_lower_shadow', False),   # 不能有长下影线
-        ('bc_raise_active_cap', False),   # 活跃市值多头趋势
-        ('bc_undumping', False), # 非放量出货才买
-        ('bc_nochase', False), # 禁止追高
-
-        ('sc_dumping', False), # 放量出货卖出
-        ('sc_4_red', False), # 累计4块红砖卖出
-        ('sc_quick_leave_buy_price', False), # 快速脱离成本区
+        ('short_amount', 30), #  短期资金
+        ('long_amount', 85), # 长期资金
     )
 
     def __init__(self):

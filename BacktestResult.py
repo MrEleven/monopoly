@@ -17,6 +17,10 @@ class BacktestResult(object):
     precise_avg_pnl = 0
     # 所有交易的收益明细
     all_pnls = []
+    # 所有交易的持仓明细
+    all_durations = []
+    # 根据涨幅分层统计
+    all_pnls_bucket = {}
 
     def __init__(self):
         self.symbol = ""
@@ -24,8 +28,11 @@ class BacktestResult(object):
         self.win_rate = 0
         self.lose_trade = 0
         self.win_rate = 0
+        self.all_pnls = []
+        self.all_durations = []
+        self.all_pnls_bucket = []
 
-    def build(total_trade, win_trade, lose_trade, avg_duration, precise_avg_pnl, all_pnls=[]):
+    def build(total_trade, win_trade, lose_trade, avg_duration, precise_avg_pnl, all_pnls=[], all_durations=[], all_pnls_bucket={}):
         result = BacktestResult()
         result.total_trade = total_trade
         result.win_trade = win_trade
@@ -34,6 +41,8 @@ class BacktestResult(object):
         result.avg_duration = avg_duration
         result.precise_avg_pnl = precise_avg_pnl
         result.all_pnls = all_pnls
+        result.all_durations = all_durations
+        result.all_pnls_bucket = all_pnls_bucket
         return result
 
     def show(self):
