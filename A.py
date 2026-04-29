@@ -1,3 +1,5 @@
+import os, sys
+os.environ['PYTHONWARNINGS'] = 'ignore'
 import backtrader as bt
 import pandas as pd
 import akshare as ak
@@ -5,228 +7,195 @@ import math
 from datetime import datetime, timedelta # 导入时间处理模块
 import os, pdb
 from ShaoFuStrategy import ShaoFuStrategy, SHAOFU_BC_CONFIG_LIST
-from DataLoader import get_data
+from DataLoader import get_data, get_all_stock_codes
 from BacktestResult import BacktestResult
 from ZhuAnStrategy import ZhuAnStrategy, ZHUAN_BC_CONFIG_LIST
+from SingleNeedleStrategy import SingleNeedleStrategy
+from pathlib import Path
 
 DATA_DIR = "stock_data_5y"
 
-def run_backtest(strategy, file_path, symbol, start_date, end_date, config_list=[{}], log_detail=True):
-    """单只股票的回测逻辑"""
-    for config in config_list:
-        config["start_date"] = start_date
-    # print("开始回测" + symbol)
+def run_single_stock_backtest(strategy, code, start_date, end_date, config={}, log_detail=True):
+    """
+        回测单只股票，单个策略
+        log_detail:是否打印单只股票回测报告
+    """
+    config["start_date"] = start_date
     # 计算预热时间
-    # 将字符串转为日期对象
     dt_start = datetime.strptime(start_date, '%Y%m%d')
     # 往前推 165 天（114个交易日约为160天，多留几天 buffer 应对长假）
     dt_preheat = dt_start - timedelta(days=170)
-    # 转回字符串格式给 get_data
     preheat_start_str = dt_preheat.strftime('%Y%m%d')
-
-    data = get_data(symbol, preheat_start_str, end_date)
+    data = get_data(code, preheat_start_str, end_date)
     if data is None or (len(data.p.dataname) < 170):
-        # print(symbol + " 数据不足，无法回测")
-        return []
+        # print(code + " 数据不足，无法回测")
+        return None
 
-    result_list = []
-    for config in config_list:
-        cerebro = bt.Cerebro(stdstats=False)
+    
+    cerebro = bt.Cerebro(stdstats=False)
+    cerebro.addobserver(bt.observers.Value)
+    if strategy.cheat_on_close:
+        cerebro.broker.set_coc(True)
+    cerebro.addstrategy(strategy, **config)
+    cerebro.adddata(data)
+    cerebro.broker.setcash(1000000.0)
+    cerebro.broker.setcommission(commission=0.0006)
+    cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="my_trades")
+    
+    cerebro_results = cerebro.run()
+    # cerebro.plot(style='bar')
+    strat = cerebro_results[0]
 
-        # 图表配置
-        # data.plotinfo.plot = False
-        cerebro.addobserver(bt.observers.Value)
-        # if ZhuAnStrategy.cheat_on_close:
-        if strategy.cheat_on_close:
-            cerebro.broker.set_coc(True)
-        # cerebro.broker.set_checksubmit(False)
-        cerebro.addstrategy(strategy, **config)
-        cerebro.adddata(data)
-        cerebro.broker.setcash(1000000.0)
-        cerebro.broker.setcommission(commission=0.0006)
-        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name="my_trades")
-        
-        cerebro_results = cerebro.run()
-        # cerebro.plot(style='bar')
-        strat = cerebro_results[0]
+    # 获取统计数据
+    trades = strat.analyzers.my_trades.get_analysis()
+    # 平均持仓天数
+    avg_duration = getattr(strat, "avg_trade_duration", 0)
+    # 平均单笔收益
+    precise_avg_pnl = getattr(strat, 'avg_trade_pnl', 0)
+    # 每笔交易收益明细
+    all_pnl_details = strat.trade_pnl_list
+    # 眉笔交易持仓天数明细
+    all_durations = strat.trade_duration_list
+    # 买入涨幅分层明细
+    pnl_bucket = strat.pnl_bucket
+    # 交易日期明细(看交易信号按照日期分布)
+    trade_date_set = strat.trade_date_set
 
-        # pdb.set_trace()
+    result = BacktestResult.build(
+        trades.total.closed if "total" in trades and "closed" in trades.total else 0, 
+        trades.won.total if "won" in trades else 0, 
+        trades.lost.total if "lost" in trades else 0,
+        avg_duration = avg_duration,
+        precise_avg_pnl = precise_avg_pnl,
+        all_pnls = all_pnl_details,
+        all_durations = all_durations,
+        all_pnls_bucket = pnl_bucket,
+        trade_date_set = trade_date_set
+    )
 
-        final_value = cerebro.broker.getvalue()
+    if log_detail:
+        result.show()
+    return result
 
-        # 获取统计数据
-        trades = strat.analyzers.my_trades.get_analysis()
-        # 提取核心精确指标
-        avg_duration = getattr(strat, "avg_trade_duration", 0)
-        # 获取策略 stop() 时计算的平均单笔收益
-        precise_avg_pnl = getattr(strat, 'avg_trade_pnl', 0)
-        # 也可以把所有明细带出去做大数据分析
-        all_pnl_details = strat.trade_pnl_list
-        all_durations = strat.trade_duration_list
-        pnl_bucket = strat.pnl_bucket
-        trade_date_set = strat.trade_date_set
+def backtest_strategy(strategy, test_name='临时回测', start_date="20250101", end_date="20260401", config={}, save_stock_result=False):
+    """
+        批量回测不同参数配置下市场中全量股票的结果
+    """
+    print(f"开始日期：{start_date}，结束日期：{end_date}")
+    print(f"策略名称：{strategy.strategy_name}，回测名称: {test_name}")
+    print_buy_condition(strategy, config)
 
-        result = BacktestResult.build(
-            trades.total.closed if "total" in trades and "closed" in trades.total else 0, 
-            trades.won.total if "won" in trades else 0, 
-            trades.lost.total if "lost" in trades else 0,
-            avg_duration = avg_duration,
-            precise_avg_pnl = precise_avg_pnl,
-            all_pnls = all_pnl_details,
-            all_durations = all_durations,
-            all_pnls_bucket = pnl_bucket,
-            trade_date_set = trade_date_set
-        )
+    # 全量股票回测中所有交易的收益明细
+    global_all_pnls = []
+    # 全量股票回测中所有交易的持仓天数明细
+    global_durations = []
+    # 用于保存股票维度的回测报告
+    stock_result_list = []
+    # 追涨幅度分层明细
+    global_pnl_bucket = {}
+    # 交易日期明细（用于统计交易信号发出日期的分布情况）
+    global_trade_date_set = set()
 
-        if log_detail:
-            result.show()
-        result_list.append(result)
-    return result_list
+    stock_codes = get_all_stock_codes()
+    # stock_codes = stock_codes[0:100]
 
-def batch_backtest(strategy, data_dir="stock_data_5y", start_date="20250101", end_date="20260401", config_list=[{}], save_result=False):
-    """批量处理文件夹下所有股票"""
-    files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
-    # files = [i for i in files if "002085" in i]
-    # files = files[0:50]
-    print("开始日期：" + start_date + "，结束日期：" + end_date)
-    print("策略名称：" + strategy.strategy_name)
-    print("一共回测策略数量：" + str(len(config_list)))
-    # print_buy_condition(strategy, config)
-
-    final_all_pnls_list = []
-    final_durations_list = []
-    final_stock_result_list = []
-    final_result_list = []
-    final_pnl_bucket_list = []
-    final_trade_date_list = []
-    for i in range(len(config_list)):
-        final_all_pnls_list.append([])
-        final_durations_list.append([])
-        final_stock_result_list.append([])
-        final_pnl_bucket_list.append({})
-        final_trade_date_list.append(set())
-
-    for j, filename in enumerate(files):
-        symbol = filename.replace('.csv', '')
-        file_path = os.path.join(data_dir, filename)
-        
+    for i, code in enumerate(stock_codes):
         try:
-            symbol_result_list = run_backtest(strategy, file_path, symbol, start_date, end_date, config_list, log_detail=False)
-            if not symbol_result_list:
+            result = run_single_stock_backtest(strategy, code, start_date, end_date, config, log_detail=False)
+            if not result:
                 continue
-            for i in range(len(config_list)):
-                global_all_pnls = final_all_pnls_list[i]
-                global_durations = final_durations_list[i]
-                # 记录单只股票回测明细
-                stock_result_list = final_stock_result_list[i]
-                pnl_bucket = final_pnl_bucket_list[i]
-                trade_date_set = final_trade_date_list[i]
+            global_all_pnls.extend(result.all_pnls)
+            global_durations.extend(result.all_durations)
+            global_trade_date_set.update(result.trade_date_set)
 
-                result = symbol_result_list[i]
-                if result is not None:
-                    global_all_pnls.extend(result.all_pnls)
-                    global_durations.extend(result.all_durations)
-                    trade_date_set.update(result.trade_date_set)
+            item = {"股票代码": code}
+            item["交易次数"] = result.total_trade
+            item["盈利次数"] = result.win_trade
+            item["亏损次数"] = result.lose_trade
+            item["单次交易胜率(%)"] = round(result.win_rate, 2)
+            item["平均单笔交易收益率(%)"] = round(result.precise_avg_pnl, 4)
+            item["平均持仓时间"] = round(result.avg_duration, 2)
+            stock_result_list.append(item)
 
-                    item = {"股票代码": symbol}
-                    item["交易次数"] = result.total_trade
-                    item["盈利次数"] = result.win_trade
-                    item["亏损次数"] = result.lose_trade
-                    item["单次交易胜率(%)"] = round(result.win_rate, 2)
-                    item["平均单笔交易收益率(%)"] = round(result.precise_avg_pnl, 4)
-                    item["平均持仓时间"] = round(result.avg_duration, 2)
-                    stock_result_list.append(item)
-
-                    for k, v in result.all_pnls_bucket.items():
-                        if k in pnl_bucket:
-                            pnl_bucket[k] = pnl_bucket[k] + v
-                        else:
-                            pnl_bucket[k] = v
+            for k, v in result.all_pnls_bucket.items():
+                if k in global_pnl_bucket:
+                    global_pnl_bucket[k] = global_pnl_bucket[k] + v
+                else:
+                    global_pnl_bucket[k] = v
         except Exception as e:
-            print(symbol + " backtest is fail", e)
+            print(code + " backtest is fail", e)
             continue
-            
-        _pretty_percent(j, len(files))
+        _pretty_percent(i, len(stock_codes))
     print("\r\033[K", end='')
 
-    for i in range(len(config_list)):
-        config = config_list[i]
-        print_buy_condition(strategy, config)
+    total_trades_count = len(global_all_pnls)
+    avg_pnl = (sum(global_all_pnls) / total_trades_count) if total_trades_count > 0 else 0
+    win_trades = len([x for x in global_all_pnls if x > 0])
+    loss_trades = len([x for x in global_all_pnls if x < 0])
+    avg_duration = sum(global_durations) / total_trades_count if total_trades_count > 0 else 0
+    win_rate = (win_trades / total_trades_count) if total_trades_count > 0 else 0
 
-        global_all_pnls = final_all_pnls_list[i]
-        global_durations = final_durations_list[i]
-        # 记录单只股票回测明细
-        stock_result_list = final_stock_result_list[i]
-        trade_date_set = final_trade_date_list[i]
+    # 计算期望值 (Expectancy) = (胜率 * 平均盈利) - (败率 * 平均亏损)
+    day_profit_pct = avg_pnl / avg_duration if avg_duration > 0 else 0
 
-        total_trades_count = len(global_all_pnls)
-        avg_pnl = (sum(global_all_pnls) / total_trades_count) if total_trades_count > 0 else 0
-        win_trades = len([x for x in global_all_pnls if x > 0])
-        avg_duration = sum(global_durations) / len(global_durations) if len(global_durations) > 0 else 0
-        win_rate = (win_trades/total_trades_count) if total_trades_count > 0 else 0
+    print("\n回测结果：")
+    print(f"交易次数： {total_trades_count} 次  盈利次数： {win_trades} 次  亏损次数： {loss_trades} 次")
+    print(f"参与交易天数:{len(global_trade_date_set)}天")
+    print(f"单次交易胜率: {win_rate*100:.2f}%")
+    print(f"平均单笔交易收益率: {avg_pnl:.4f}%")
+    print(f"平均持仓时间: {avg_duration:.2f} 天")
+    print(f"持仓一天收益率: {day_profit_pct:.4f}%")
+    print('====================================================================================')
 
-        # 计算期望值 (Expectancy) = (胜率 * 平均盈利) - (败率 * 平均亏损)
-        win_pnl = [x for x in global_all_pnls if x > 0]
-        loss_pnl = [x for x in global_all_pnls if x < 0]
-        balance_pnl = [x for x in global_all_pnls if x == 0]
-        day_profit_pct = avg_pnl/avg_duration if avg_duration > 0 else 0
+    print("买入涨幅分层统计结果：")
+    for k, v in sorted(global_pnl_bucket.items()):
+        if not v:
+            continue
+        avg_bucket_pct = (sum(v) / len(v))
+        print(f"涨幅:{k}%，总交易数:{len(v)}，收益率:{avg_bucket_pct:.2f}%")
+    if save_stock_result:
+        save_stock_report(strategy, stock_result_list, start_date, end_date)
+    return BacktestResult.build(total_trades_count, win_trades, loss_trades, avg_duration, avg_pnl)
 
-
-
-        print("\n回测结果：")
-        print(f"交易次数： {total_trades_count} 次  盈利次数： {len(win_pnl)} 次  亏损次数： {len(loss_pnl)} 次")
-        print(f"参与交易天数:{len(trade_date_set)}天")
-        print(f"单次交易胜率: {win_rate*100:.2f}%")
-        print(f"平均单笔交易收益率: {avg_pnl:.4f}%")
-        print(f"平均持仓时间: {avg_duration:.2f} 天")
-        print(f"持仓一天收益率: {day_profit_pct:.4f}%")
-        print('====================================================================================')
-
-        print("买入涨幅分层统计结果：")
-        bucket = final_pnl_bucket_list[i]
-        for k, v in sorted(bucket.items()):
-            if not v:
-                continue
-            avg_bucket_pct = (sum(v) / len(v))
-            print(f"涨幅:{k}%，总交易数:{len(v)}，收益率:{avg_bucket_pct:.2f}%")
-
-        if save_result:
-            file_name = [strategy.strategy_name, start_date, end_date]
-            condtions = [k for k, v in config.items() if (k.startswith("bc_") or k.startswith("sc_")) and v]
-            file_name.extend(condtions)
-            file_name = "_".join(file_name) + ".csv"
-            df_results = pd.DataFrame(stock_result_list)
-            df_results.sort_values(by="平均单笔交易收益率(%)", ascending=False)
-            # file_name = "_".join([strategy.strategy_name, start_date, end_date])
-            df_results.to_csv("result\\" + file_name, index=False, encoding='utf_8_sig')
-        final_result_list.append(BacktestResult.build(total_trades_count, len(win_pnl), len(loss_pnl), avg_duration, avg_pnl))
-    return final_result_list
+def save_stock_report(strategy, stock_result_list, start_date, end_date):
+    """保存单个策略股票维度的报告"""
+    file_name = [strategy.strategy_name, "股票明细", start_date, end_date]
+    condtions = [k for k, v in config.items() if (k.startswith("bc_") or k.startswith("sc_")) and v]
+    file_name.extend(condtions)
+    file_name = "_".join(file_name) + ".csv"
+    df_results = pd.DataFrame(stock_result_list)
+    df_results.sort_values(by="平均单笔交易收益率(%)", ascending=False)
+    # file_name = "_".join([strategy.strategy_name, start_date, end_date])
+    df_results.to_csv("result\\" + file_name, index=False, encoding='utf_8_sig')
 
 def print_buy_condition(strategy, config={}):
+    """打印参数"""
     strategy.print_buy_condition(config=config)
-    
-
-# def get_buy_condition_str(config={}):
-#     """获取保存回测结果的文件名"""
-#     rst_file_name = []
-#     if config.get("bc_kdj", ShaoFuStrategy.params.bc_kdj):
-#         rst_file_name.append("kdj")
-#     if config.get("bc_raise_trend", ShaoFuStrategy.params.bc_raise_trend):
-#         rst_file_name.append("raise_trend")
-#     if config.get("bc_undumping", ShaoFuStrategy.params.bc_undumping):
-#         rst_file_name.append("nodump")
-#     if config.get("bc_overyellow", ShaoFuStrategy.params.bc_overyellow):
-#         rst_file_name.append("over_yellow")
-#     return "_".join(rst_file_name)
 
 def _pretty_percent(current, total):
+    """打印进度条"""
     p = int(current * 100 / total)
     total_len = len(str(total))
     tmp = "[" + "#" * p + "-" * (100-p) + "]" + str(p).rjust(3) + "% (" + str(current).rjust(total_len) + "/" + str(total) + ")"
     print("\r" + tmp, end="")
 
-def backtest_all_config(strategy, test_name='', config_list=[{}], start_date="20250101", end_date="20260417"):
-    result_list = batch_backtest(strategy=ZhuAnStrategy, data_dir="stock_data_5y", start_date=start_date, end_date=end_date, config_list=config_list, save_result=False)
+def batch_strage_backtest(strategy, test_name='', start_date='20250101', end_date='20260417', config_list=[{}], save_result=False):
+    """
+        批量回测同一个策略的不同配置，一般用于最佳因子选拔，与比较参数对回测结果的影响
+    """
+    result_list = []
+    for i in range(len(config_list)):
+        config = config_list[i]
+        result = backtest_strategy(strategy, test_name=test_name, start_date=start_date, end_date=end_date, config=config, save_stock_result=False)
+        result_list.append(result)
+        print(f"一共回测策略数量：{len(config_list)}，目前已经完成：{i+1}，还剩：{len(config_list)-1-i}")
+    if save_result:
+        save_summary_report(strategy, test_name, config_list, result_list, start_date, end_date)
+
+def save_summary_report(strategy, test_name='', config_list=[{}], result_list=[], start_date="20250101", end_date="20260417"):
+    """
+        保存整体测试报告，一般用于保存因子选拔，不同参数对策略结果的影响
+    """
     final_result_list = []
     for i in range(len(config_list)):
         config = config_list[i]
@@ -245,32 +214,31 @@ def backtest_all_config(strategy, test_name='', config_list=[{}], start_date="20
         item["持仓一天收益率(%)"] = round(day_profit_pct, 2)
         final_result_list.append(item)
 
-    # df_results = pd.DataFrame(final_result_list)
-    # df_results.sort_values(by="平均单笔交易收益率(%)", ascending=False)
-    # file_name = [test_name, start_date, end_date]
-    # file_name = "result\\" + strategy.strategy_name+"\\" + "_".join(file_name) + ".csv"
-    # df_results.to_csv(file_name, index=False, encoding='utf_8_sig')
+    df_results = pd.DataFrame(final_result_list)
+    df_results.sort_values(by="平均单笔交易收益率(%)", ascending=False)
+    file_dir = Path("result") / strategy.strategy_name
+    file_dir.mkdir(parents=True, exist_ok=True)
+
+    file_name = "_".join([test_name, start_date, end_date]) + ".csv"
+    file_path = file_dir / file_name
+    df_results.to_csv(str(file_path), index=False, encoding='utf_8_sig')
 
 if __name__ == '__main__':
-    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20250101", end_date="20260101", config_list=ZHUAN_BC_CONFIG_LIST)
-    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20240101", end_date="20250101", config_list=ZHUAN_BC_CONFIG_LIST)
-    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20230101", end_date="20240101", config_list=ZHUAN_BC_CONFIG_LIST)
-    # backtest_all_config(ZhuAnStrategy, test_name='不追高_涨幅因子选拔', start_date="20220101", end_date="20230101", config_list=ZHUAN_BC_CONFIG_LIST)
+    # batch_strage_backtest(SingleNeedleStrategy, test_name='不追高_涨幅因子选拔', start_date="20250101", end_date="20260101", config_list=ZHUAN_BC_CONFIG_LIST, save_result=True)
+    # batch_strage_backtest(SingleNeedleStrategy, test_name='不追高_涨幅因子选拔', start_date="20240101", end_date="20250101", config_list=ZHUAN_BC_CONFIG_LIST, save_result=True)
+    # batch_strage_backtest(SingleNeedleStrategy, test_name='不追高_涨幅因子选拔', start_date="20230101", end_date="20240101", config_list=ZHUAN_BC_CONFIG_LIST, save_result=True)
+    # batch_strage_backtest(SingleNeedleStrategy, test_name='不追高_涨幅因子选拔', start_date="20220101", end_date="20230101", config_list=ZHUAN_BC_CONFIG_LIST, save_result=True)
     # # config_1 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': True, "bc_no_lower_shadow": False, 'sc_4_red': True, 'sc_dumping': False, 'sc_quick_leave_buy_price': True}
     # config_2 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': False, "bc_no_lower_shadow": False, 'sc_4_red': False, 'sc_dumping': True, "sc_quick_leave_buy_price": True}
     config_2 = {
-        "bc_raise_trend": True, 
-        "bc_overyellow": True, 
-        'bc_no_upper_shadow': True, 
-        "bc_no_lower_shadow": False,
-        "bc_undumping": False,
-        "bc_raise_active_cap": False,
+        # "log_open": True,
+        "bc_raise_trend": True,
         "bc_nochase": True,
-        "sc_quick_leave_buy_price": True,
-        "sc_dumping": True,
-        "sc_4_red": True
+        "bc_trend_alive": True,
+        "sc_quick_leave_buy_price": False,
+        "bc_raise_active_cap": False,
     }
-    backtest_all_config(ZhuAnStrategy, test_name='临时测试', start_date="20250101", end_date="20260417", config_list=[config_2])
+    batch_strage_backtest(SingleNeedleStrategy, test_name='临时测试', start_date="20250101", end_date="20260417", config_list=[config_2], save_result=False)
     # start("002766", start_date="20220101", end_date="20260401")
     # 请确保 data_dir 指向你下载 CSV 的文件夹
     # for config in ZHUAN_BC_CONFIG_LIST:
@@ -279,4 +247,4 @@ if __name__ == '__main__':
     # batch_backtest(strategy=ZhuAnStrategy, data_dir="stock_data_5y", start_date="20220101", end_date="20250101", config=config)
     # config={"log_open": True, "bc_raise_active_cap": True, 'bc_no_upper_shadow': True, 'bc_no_lower_shadow': True}
     # config_2["log_open"] = True
-    # run_backtest(ZhuAnStrategy, "stock_data_5y/688205.csv", "688205", start_date="20250101", end_date="20260417", config_list=[config_2])
+    # run_single_stock_backtest(SingleNeedleStrategy, "002658", start_date="20250101", end_date="20260417", config=config_2)

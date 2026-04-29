@@ -8,7 +8,7 @@ import os, pdb
 DATA_DIR = "stock_data_5y"
 
 def get_data(symbol="600519", start_date="20240101", end_date="20251231"):
-    """获取股票历史数据"""
+    """获取股票指定日期的历史数据"""
     return _get_data_native(symbol=symbol, start_date=start_date, end_date=end_date)
 
 def _get_data(symbol="600519", start_date="20240101", end_date="20251231"):
@@ -37,3 +37,9 @@ def _get_data_native(symbol="600519", start_date="20240101", end_date="20251231"
     df.rename(columns={'开盘': 'open', '最高': 'high', '最低': 'low', '收盘': 'close', '成交量': 'volume'}, inplace=True)
     data = bt.feeds.PandasData(dataname=df, name=symbol)
     return data
+
+def get_all_stock_codes():
+    """
+        获取所有股票代码
+    """
+    return [f.replace(".csv", "") for f in os.listdir(DATA_DIR) if f.endswith('.csv')]

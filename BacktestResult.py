@@ -34,7 +34,7 @@ class BacktestResult(object):
         self.all_durations = []
         self.all_pnls_bucket = []
 
-    def build(total_trade, win_trade, lose_trade, avg_duration, precise_avg_pnl, all_pnls=[], all_durations=[], all_pnls_bucket={},trade_date_set=set()):
+    def build(total_trade, win_trade, lose_trade, avg_duration, precise_avg_pnl, all_pnls=[], all_durations=[], all_pnls_bucket={}, trade_date_set=set()):
         result = BacktestResult()
         result.total_trade = total_trade
         result.win_trade = win_trade

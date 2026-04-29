@@ -7,6 +7,7 @@ import os, pdb
 from ZhuAnIndicator import ZhuAnIndicator
 from ActiveCapIndicator import in_active_cap_raise
 import itertools
+from MonopolyHelper import get_limit_price
 
 # 定义所有布尔型参数的名称
 condition_keys = [
@@ -53,24 +54,6 @@ for chasing_ratio in [0.15, 0.12, 0.1, 0.09, 0.08, 0.07, 0.06, 0.05]:
 #     config.update(base_config)
 #     ZHUAN_BC_CONFIG_LIST.append(config)
 
-def get_limit_price(prev_close, stock_name):
-    """
-    根据代码识别板块并判断今日收盘是否封死涨跌停
-    """
-    # 识别板块比例（主板10%，双创20%，北交30%）
-    if stock_name.startswith(('688', '30')): 
-        limit_ratio = 0.20
-    elif stock_name.startswith(('8', '4')): 
-        limit_ratio = 0.30
-    else: 
-        limit_ratio = 0.10
-
-    # 计算理论涨跌停价（精确到分）
-    limit_up_price = round(prev_close * (1 + limit_ratio) + 0.0001, 2)
-    limit_down_price = round(prev_close * (1 - limit_ratio) + 0.0001, 2)
-    return limit_up_price, limit_down_price
-
-
 class ZhuAnStrategy(bt.Strategy):
     # 此策略需要开启CheatOnClose模式
     strategy_name = "砖型图"
@@ -94,6 +77,7 @@ class ZhuAnStrategy(bt.Strategy):
         ('bc_raise_active_cap', False),   # 活跃市值多头趋势
         ('bc_undumping', False), # 非放量出货才买
         ('bc_nochase', False), # 禁止追高
+        ('bc_macd_white_0', False), # MACD 白线零轴之上
 
         ('sc_dumping', False), # 放量出货卖出
         ('sc_4_red', False), # 累计4块红砖卖出
