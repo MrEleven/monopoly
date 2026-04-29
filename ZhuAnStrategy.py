@@ -113,9 +113,9 @@ class ZhuAnStrategy(bt.Strategy):
 
     def next(self):
         # --- 新增：日期拦截逻辑 ---
+        # 将当前回测到的日期转为 YYYYMMDD 格式的整数或字符串进行对比
+        current_date = self.data.datetime.date(0).strftime('%Y%m%d')
         if self.params.start_date:
-            # 将当前回测到的日期转为 YYYYMMDD 格式的整数或字符串进行对比
-            current_date = self.data.datetime.date(0).strftime('%Y%m%d')
             if current_date < self.params.start_date:
                 # 在到达目标日期之前，我们依然允许维护计数器（可选）
                 # 但绝对不执行买入逻辑
@@ -164,7 +164,7 @@ class ZhuAnStrategy(bt.Strategy):
                 self.order = self.sell(exectype=bt.Order.Limit, 
                                        price=sell_limit_price, 
                                        size=self.position.size)
-                self.log(f"【限价卖出挂单】原因：卖单没成交，挂单价: {sell_limit_price:.2f} (跌停价+0.01)")
+                self.log(f"【限价卖出挂单】{self.stock_name} 原因：卖单没成交，挂单价: {sell_limit_price:.2f} (跌停价+0.01)")
                 return
 
             sell_signal = False
@@ -205,11 +205,11 @@ class ZhuAnStrategy(bt.Strategy):
                     self.order = self.sell(exectype=bt.Order.Limit, 
                                            price=sell_limit_price, 
                                            size=self.position.size)
-                    self.log(f"【限价卖出挂单】原因：{reason}，挂单价: {sell_limit_price:.2f} (跌停价+0.01)")
+                    self.log(f"【限价卖出挂单】{self.stock_name} 原因：{reason}，挂单价: {sell_limit_price:.2f} (跌停价+0.01)")
                     return
                 # 今日尾盘即刻卖出
                 self.order = self.close(exectype=bt.Order.Market)
-                self.log(f"【尾盘卖出】原因：{reason}，参考成交价: {self.data.close[0]:.2f}")
+                self.log(f"【尾盘卖出】{self.stock_name} 原因：{reason}，参考成交价: {self.data.close[0]:.2f}")
                 return
 
         # --- 3. 选股买入逻辑 ---
@@ -307,7 +307,7 @@ class ZhuAnStrategy(bt.Strategy):
                         return
                     # 核心：使用今日收盘价下单
                     self.order = self.buy(exectype=bt.Order.Market, size=size)
-                    self.log(f"【尾盘买入】砖型触发，以今日收盘价成交: {self.data.close[0]:.2f}")
+                    self.log(f"【尾盘买入】{self.stock_name}，以今日收盘价成交: {self.data.close[0]:.2f}")
 
                     # 记录涨幅
                     self.buy_price_change = (self.data.close[0] - self.data.close[-1]) * 100 // self.data.close[-1]
@@ -335,7 +335,8 @@ class ZhuAnStrategy(bt.Strategy):
 
         # 确保有足够的跌幅，防止横盘连续3天小幅阴跌(跌幅非常小，整体处于横盘状态)。
         # 获取过去7天的收盘价序列（不含今天，所以是 -1 到 -7）
-        closes_7d = self.data.close.get(ago=1, size=7)
+        current_date = self.data.datetime.date(0).strftime('%Y%m%d')
+        closes_7d = self.data.close.get(ago=-1, size=7)
         if len(closes_7d) < 7: return False
         hi_7d = max(closes_7d)
         lo_7d = min(closes_7d)
@@ -362,7 +363,6 @@ class ZhuAnStrategy(bt.Strategy):
             return False
 
         # --- 1. 获取过去4天的价格和成交量数据 (不含今天) ---
-        # get(ago=1, size=4) 获取的是 [yesterday, before_yester, ...]
         past_highs = self.data.high.get(ago=-1, size=4)
         past_lows = self.data.low.get(ago=-1, size=4)
         past_closes = self.data.close.get(ago=-1, size=4)

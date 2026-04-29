@@ -229,9 +229,21 @@ if __name__ == '__main__':
     # batch_strage_backtest(SingleNeedleStrategy, test_name='不追高_涨幅因子选拔', start_date="20230101", end_date="20240101", config_list=ZHUAN_BC_CONFIG_LIST, save_result=True)
     # batch_strage_backtest(SingleNeedleStrategy, test_name='不追高_涨幅因子选拔', start_date="20220101", end_date="20230101", config_list=ZHUAN_BC_CONFIG_LIST, save_result=True)
     # # config_1 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': True, "bc_no_lower_shadow": False, 'sc_4_red': True, 'sc_dumping': False, 'sc_quick_leave_buy_price': True}
-    # config_2 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': False, "bc_no_lower_shadow": False, 'sc_4_red': False, 'sc_dumping': True, "sc_quick_leave_buy_price": True}
+    config_1 = {
+        # "log_open": True,
+        "bc_raise_trend": True, 
+        "bc_overyellow": True, 
+        'bc_no_upper_shadow': True, 
+        "bc_no_lower_shadow": False,
+        "bc_undumping": False,
+        "bc_raise_active_cap": False,
+        "bc_nochase": True,
+        "sc_quick_leave_buy_price": False,
+        "sc_dumping": True,
+        "sc_4_red": True
+    }
     config_2 = {
-        "log_open": True,
+        # "log_open": True,
         "bc_raise_trend": True, 
         "bc_overyellow": True, 
         'bc_no_upper_shadow': True, 
@@ -243,7 +255,7 @@ if __name__ == '__main__':
         "sc_dumping": True,
         "sc_4_red": True
     }
-    # batch_strage_backtest(ZhuAnStrategy, test_name='基础测试', start_date="20250101", end_date="20260417", config_list=[config_2], save_result=False)
+    batch_strage_backtest(ZhuAnStrategy, test_name='快速脱离成本', start_date="20250101", end_date="20260417", config_list=[config_1, config_2], save_result=True)
     # start("002766", start_date="20220101", end_date="20260401")
     # 请确保 data_dir 指向你下载 CSV 的文件夹
     # for config in ZHUAN_BC_CONFIG_LIST:
@@ -252,4 +264,5 @@ if __name__ == '__main__':
     # batch_backtest(strategy=ZhuAnStrategy, data_dir="stock_data_5y", start_date="20220101", end_date="20250101", config=config)
     # config={"log_open": True, "bc_raise_active_cap": True, 'bc_no_upper_shadow': True, 'bc_no_lower_shadow': True}
     # config_2["log_open"] = True
-    run_single_stock_backtest(ZhuAnStrategy, "301396", start_date="20250101", end_date="20260417", config=config_2)
+    # run_single_stock_backtest(ZhuAnStrategy, "000506", start_date="20250101", end_date="20260417", config=config_2)
+    # run_single_stock_backtest(ZhuAnStrategy, "920642", start_date="20250101", end_date="20260417", config=config_2)
