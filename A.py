@@ -154,10 +154,10 @@ def backtest_strategy(strategy, test_name='临时回测', start_date="20250101",
         avg_bucket_pct = (sum(v) / len(v))
         print(f"涨幅:{k}%，总交易数:{len(v)}，收益率:{avg_bucket_pct:.2f}%")
     if save_stock_result:
-        save_stock_report(strategy, stock_result_list, start_date, end_date)
+        save_stock_report(strategy, stock_result_list, start_date, end_date, config=config)
     return BacktestResult.build(total_trades_count, win_trades, loss_trades, avg_duration, avg_pnl)
 
-def save_stock_report(strategy, stock_result_list, start_date, end_date):
+def save_stock_report(strategy, stock_result_list, start_date, end_date, config):
     """保存单个策略股票维度的报告"""
     file_name = [strategy.strategy_name, "股票明细", start_date, end_date]
     condtions = [k for k, v in config.items() if (k.startswith("bc_") or k.startswith("sc_")) and v]
@@ -186,7 +186,7 @@ def batch_strage_backtest(strategy, test_name='', start_date='20250101', end_dat
     result_list = []
     for i in range(len(config_list)):
         config = config_list[i]
-        result = backtest_strategy(strategy, test_name=test_name, start_date=start_date, end_date=end_date, config=config, save_stock_result=False)
+        result = backtest_strategy(strategy, test_name=test_name, start_date=start_date, end_date=end_date, config=config, save_stock_result=True)
         result_list.append(result)
         print(f"一共回测策略数量：{len(config_list)}，目前已经完成：{i+1}，还剩：{len(config_list)-1-i}")
     if save_result:
@@ -231,14 +231,19 @@ if __name__ == '__main__':
     # # config_1 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': True, "bc_no_lower_shadow": False, 'sc_4_red': True, 'sc_dumping': False, 'sc_quick_leave_buy_price': True}
     # config_2 = {"bc_raise_trend": True, "bc_overyellow": True, 'bc_raise_active_cap': False, 'bc_no_upper_shadow': False, "bc_no_lower_shadow": False, 'sc_4_red': False, 'sc_dumping': True, "sc_quick_leave_buy_price": True}
     config_2 = {
-        # "log_open": True,
-        "bc_raise_trend": True,
-        "bc_nochase": True,
-        "bc_trend_alive": True,
-        "sc_quick_leave_buy_price": False,
+        "log_open": True,
+        "bc_raise_trend": True, 
+        "bc_overyellow": True, 
+        'bc_no_upper_shadow': True, 
+        "bc_no_lower_shadow": False,
+        "bc_undumping": False,
         "bc_raise_active_cap": False,
+        "bc_nochase": True,
+        "sc_quick_leave_buy_price": True,
+        "sc_dumping": True,
+        "sc_4_red": True
     }
-    batch_strage_backtest(SingleNeedleStrategy, test_name='临时测试', start_date="20250101", end_date="20260417", config_list=[config_2], save_result=False)
+    # batch_strage_backtest(ZhuAnStrategy, test_name='基础测试', start_date="20250101", end_date="20260417", config_list=[config_2], save_result=False)
     # start("002766", start_date="20220101", end_date="20260401")
     # 请确保 data_dir 指向你下载 CSV 的文件夹
     # for config in ZHUAN_BC_CONFIG_LIST:
@@ -247,4 +252,4 @@ if __name__ == '__main__':
     # batch_backtest(strategy=ZhuAnStrategy, data_dir="stock_data_5y", start_date="20220101", end_date="20250101", config=config)
     # config={"log_open": True, "bc_raise_active_cap": True, 'bc_no_upper_shadow': True, 'bc_no_lower_shadow': True}
     # config_2["log_open"] = True
-    # run_single_stock_backtest(SingleNeedleStrategy, "002658", start_date="20250101", end_date="20260417", config=config_2)
+    run_single_stock_backtest(ZhuAnStrategy, "301396", start_date="20250101", end_date="20260417", config=config_2)
