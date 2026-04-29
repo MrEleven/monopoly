@@ -1,2 +1,0 @@
-﻿策略名称,bc_raise_trend,bc_overyellow,bc_raise_active_cap,bc_no_upper_shadow,bc_no_lower_shadow,sc_4_red,sc_dumping,sc_quick_leave_buy_price,交易次数,盈利次数,亏损次数,单次交易胜率(%),平均单笔交易收益率(%),平均持仓时间
-砖型图,True,True,False,True,False,False,True,True,2051,1224,827,59.68,2.5936,2.28

@@ -97,7 +97,7 @@ def backtest_strategy(strategy, test_name='临时回测', start_date="20250101",
     global_trade_date_set = set()
 
     stock_codes = get_all_stock_codes()
-    stock_codes = stock_codes[0:100]
+    # stock_codes = stock_codes[0:100]
 
     for i, code in enumerate(stock_codes):
         try:
@@ -237,7 +237,7 @@ if __name__ == '__main__':
         "bc_no_lower_shadow": False,
         "bc_undumping": False,
         "bc_raise_active_cap": False,
-        "bc_nochase": True,
+        "bc_nochase": False,
         "sc_quick_leave_buy_price": False,
         "sc_dumping": True,
         "sc_4_red": True
@@ -250,12 +250,12 @@ if __name__ == '__main__':
         "bc_no_lower_shadow": False,
         "bc_undumping": False,
         "bc_raise_active_cap": False,
-        "bc_nochase": True,
+        "bc_nochase": False,
         "sc_quick_leave_buy_price": True,
         "sc_dumping": True,
         "sc_4_red": True
     }
-    batch_strage_backtest(ZhuAnStrategy, test_name='快速脱离成本', start_date="20250101", end_date="20260417", config_list=[config_1, config_2], save_result=True)
+    batch_strage_backtest(ZhuAnStrategy, test_name='不追高', start_date="20250101", end_date="20260417", config_list=[config_1], save_result=True)
     # start("002766", start_date="20220101", end_date="20260401")
     # 请确保 data_dir 指向你下载 CSV 的文件夹
     # for config in ZHUAN_BC_CONFIG_LIST:
