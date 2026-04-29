@@ -97,7 +97,7 @@ def backtest_strategy(strategy, test_name='临时回测', start_date="20250101",
     global_trade_date_set = set()
 
     stock_codes = get_all_stock_codes()
-    # stock_codes = stock_codes[0:100]
+    stock_codes = stock_codes[0:100]
 
     for i, code in enumerate(stock_codes):
         try:
@@ -154,19 +154,19 @@ def backtest_strategy(strategy, test_name='临时回测', start_date="20250101",
         avg_bucket_pct = (sum(v) / len(v))
         print(f"涨幅:{k}%，总交易数:{len(v)}，收益率:{avg_bucket_pct:.2f}%")
     if save_stock_result:
-        save_stock_report(strategy, stock_result_list, start_date, end_date, config=config)
+        save_stock_report(strategy, test_name, stock_result_list, start_date, end_date, config=config)
     return BacktestResult.build(total_trades_count, win_trades, loss_trades, avg_duration, avg_pnl)
 
-def save_stock_report(strategy, stock_result_list, start_date, end_date, config):
-    """保存单个策略股票维度的报告"""
-    file_name = [strategy.strategy_name, "股票明细", start_date, end_date]
+def save_stock_report(strategy, test_name, stock_result_list, start_date, end_date, config):
+    file_name = [strategy.strategy_name, test_name, "股票明细", start_date, end_date]
     condtions = [k for k, v in config.items() if (k.startswith("bc_") or k.startswith("sc_")) and v]
     file_name.extend(condtions)
     file_name = "_".join(file_name) + ".csv"
+    file_dir = Path("result") / strategy.strategy_name
+    file_path = file_dir / file_name
     df_results = pd.DataFrame(stock_result_list)
     df_results.sort_values(by="平均单笔交易收益率(%)", ascending=False)
-    # file_name = "_".join([strategy.strategy_name, start_date, end_date])
-    df_results.to_csv("result\\" + file_name, index=False, encoding='utf_8_sig')
+    df_results.to_csv(str(file_path), index=False, encoding='utf_8_sig')
 
 def print_buy_condition(strategy, config={}):
     """打印参数"""
