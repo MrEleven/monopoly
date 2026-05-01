@@ -17,18 +17,26 @@ SHAOFU_BC_CONFIG_LIST = [BC_CONFIG_KDJ, BC_CONFIG_KDJ_RAISE_TREND,
     BC_CONFIG_KDJ_RAISE_TREND_NODUMP_OVER_YELLOW]
 
 class ShaoFuStrategy(bt.Strategy):
-    strategy_name = "少妇战法B1买点"
+    strategy_name = "少妇战法"
+    cheat_on_close = False
     params = (
         ('j_low', 13),
         ('vol_period', 30),
         ('stop_loss_pct', 0.01), # 止损 1%
         ('percents', 0.99),     # 梭哈比例 99%
         ('log_open', False), # 股价在黄线之上才买
+        ('start_date', None),
 
-        ('bc_raise_trend', False), # 上升趋势才买
+        ('bc_raise_trend', True), # 上升趋势才买
         ('bc_kdj', True), # KDJ的J小于阈值才买
         ('bc_undumping', True), # 非放量出货才买
-        ('bc_overyellow', False), # 股价在黄线之上才买
+        ('bc_overyellow', True), # 股价在黄线之上才买
+        ('bc_unnormal', False), # 异动
+        ('bc_price_vol_relation', False), # 量价关系检查
+
+        ('bc_main_force', True),      # 开启量能比检查
+        ('vol_ratio_threshold', 1.1), # 阳量/阴量 阈值
+        ('main_force_period', 15),    # 固定回溯 15 天
     )
 
     def __init__(self):
@@ -59,17 +67,38 @@ class ShaoFuStrategy(bt.Strategy):
         self.stop_price = None # 动态止损价
         self.buy_value = 0     # 记录买入时的总市值
 
-        self.log("少妇战法 初始化买入条件：")
-        if self.params.bc_kdj:
-            self.log(" - KDJ的J < " + str(ShaoFuStrategy.params.j_low))
-        if self.params.bc_raise_trend:
-            self.log(" - 上升趋势")
-        if self.params.bc_undumping:
-            self.log(" - 非放量出货 时间区间:" + str(ShaoFuStrategy.params.vol_period) + "天")
-        if self.params.bc_overyellow:
-            self.log(" - 股价在黄线之上")
+        self.trade_pnl_list = []  # 记录每一笔交易的百分比收益率
+        self.trade_duration_list = [] # 记录每一笔交易的持仓天数
+        self.trade_date_set = set() # 记录每一笔成交的日期
+
+        # --- 新增：主力建仓指标 (量比) ---
+        # 定义阳线成交量：收盘 > 开盘 则记录量，否则为 0
+        self.up_vol = bt.If(self.data.close > self.data.open, self.data.volume, 0)
+        # 定义阴线成交量：收盘 < 开盘 则记录量，否则为 0
+        self.down_vol = bt.If(self.data.close < self.data.open, self.data.volume, 0)
+
+        # 计算过去 15 天的累加和
+        self.sum_up_15 = bt.indicators.SumN(self.up_vol, period=self.params.main_force_period)
+        self.sum_down_15 = bt.indicators.SumN(self.down_vol, period=self.params.main_force_period)
+
+        # self.log("少妇战法 初始化买入条件：")
+        # if self.params.bc_kdj:
+        #     self.log(" - KDJ的J < " + str(ShaoFuStrategy.params.j_low))
+        # if self.params.bc_raise_trend:
+        #     self.log(" - 上升趋势")
+        # if self.params.bc_undumping:
+        #     self.log(" - 非放量出货 时间区间:" + str(ShaoFuStrategy.params.vol_period) + "天")
+        # if self.params.bc_overyellow:
+        #     self.log(" - 股价在黄线之上")
 
     def next(self):
+        # --- 新增：日期拦截逻辑 ---
+        # 将当前回测到的日期转为 YYYYMMDD 格式的整数或字符串进行对比
+        current_date = self.data.datetime.date(0).strftime('%Y%m%d')
+        if self.params.start_date:
+            if current_date < self.params.start_date:
+                return
+
         if self.order: # 检查是否有挂单
             self.cancel(self.order)
             self.order = None
@@ -104,7 +133,17 @@ class ShaoFuStrategy(bt.Strategy):
             # 收盘价在黄线之上
             cond_over_yellow = (self.data.close[0] > self.yellow_line[0]) if self.params.bc_overyellow else True
 
-            if cond_kdj and cond_trend and cond_nodump and cond_over_yellow:
+            # --- [新增]：15天量能比判定 ---
+            cond_main_force = True
+            if self.params.bc_main_force:
+                # 为了防止分母为 0 导致报错，使用 0.001 或 1 做保护
+                up_total = self.sum_up_15[0]
+                down_total = self.sum_down_15[0] if self.sum_down_15[0] > 0 else 1.0
+                
+                # 判断上涨量是否是下跌量的 1.1 倍以上
+                cond_main_force = (up_total / down_total) >= self.params.vol_ratio_threshold
+
+            if cond_kdj and cond_trend and cond_nodump and cond_over_yellow and cond_main_force:
                 # 1. 计算挂单价格（今日收盘价上浮 2%）
                 limit_price = self.data.close[0] * 1.02
                 
@@ -119,6 +158,8 @@ class ShaoFuStrategy(bt.Strategy):
                     # 3. 指定 size 发出限价单
                     self.order = self.buy(exectype=bt.Order.Limit, price=limit_price, size=size)
                     self.log(f'【{self.stock_name}】买入信号: J值 {self.j_line[0]:.2f}，挂单价 {limit_price:.2f}，计算梭哈股数 {size} | 当前余额: {self.broker.get_cash():.2f}')
+
+                    self.trade_date_set.add(current_date)
 
         # --- 已持仓：寻找卖点 ---
         else:
@@ -161,7 +202,6 @@ class ShaoFuStrategy(bt.Strategy):
                 self.log(f'回拢后现金: {self.broker.get_cash():.2f}')
                 self.log("====================================================================================")
                 self.stop_price = None
-                self.buy_value = 0
             self.order = None 
         elif order.status in [order.Margin, order.Rejected]:
             self.log(f'【{self.stock_name}】订单失败: 资金不足或被拒绝 | 当前余额: {self.broker.get_cash():.2f}')
@@ -171,6 +211,20 @@ class ShaoFuStrategy(bt.Strategy):
             self.log(f'【{self.stock_name}】订单失败：订单取消 | 当前余额: {self.broker.get_cash():.2f}')
             self.log("====================================================================================")
             self.order = None
+
+    def notify_trade(self, trade):
+        # pdb.set_trace()
+        if trade.isclosed:
+            # 这里的 trade.pnlcomm 是扣除买卖双边佣金后的净利润
+            # 精确收益率 = 净利润 / 买入总成本
+            if self.buy_value != 0:
+                pnl_pct = (trade.pnlcomm / self.buy_value) * 100
+                self.trade_pnl_list.append(pnl_pct)
+                self.trade_duration_list.append(trade.barlen)
+            
+                # log 记录（可选）
+                self.log(f"【交易结束】回拢后现金: {self.broker.get_cash():.2f}，持仓天数: {trade.barlen}, 净收益率: {pnl_pct:.2f}%")
+                self.log("====================================================================================")
 
     def log(self, txt):
         if not self.params.log_open:

@@ -15,12 +15,14 @@ from pathlib import Path
 
 DATA_DIR = "stock_data_5y"
 
-def run_single_stock_backtest(strategy, code, start_date, end_date, config={}, log_detail=True):
+def run_single_stock_backtest(strategy, code, start_date, end_date, config={}, log_detail=False):
     """
         回测单只股票，单个策略
         log_detail:是否打印单只股票回测报告
     """
     config["start_date"] = start_date
+    if "log_open" not in config:
+        config["log_open"] = log_detail
     # 计算预热时间
     dt_start = datetime.strptime(start_date, '%Y%m%d')
     # 往前推 165 天（114个交易日约为160天，多留几天 buffer 应对长假）
@@ -57,7 +59,7 @@ def run_single_stock_backtest(strategy, code, start_date, end_date, config={}, l
     # 眉笔交易持仓天数明细
     all_durations = strat.trade_duration_list
     # 买入涨幅分层明细
-    pnl_bucket = strat.pnl_bucket
+    pnl_bucket = getattr(strat, "pnl_bucket", {})
     # 交易日期明细(看交易信号按照日期分布)
     trade_date_set = strat.trade_date_set
 
@@ -97,7 +99,7 @@ def backtest_strategy(strategy, test_name='临时回测', start_date="20250101",
     global_trade_date_set = set()
 
     stock_codes = get_all_stock_codes()
-    # stock_codes = stock_codes[0:100]
+    # stock_codes = stock_codes[0:500]
 
     for i, code in enumerate(stock_codes):
         try:
@@ -158,7 +160,7 @@ def backtest_strategy(strategy, test_name='临时回测', start_date="20250101",
     return BacktestResult.build(total_trades_count, win_trades, loss_trades, avg_duration, avg_pnl)
 
 def save_stock_report(strategy, test_name, stock_result_list, start_date, end_date, config):
-    file_name = [strategy.strategy_name, test_name, "股票明细", start_date, end_date]
+    file_name = [test_name, "股票明细", start_date, end_date]
     condtions = [k for k, v in config.items() if (k.startswith("bc_") or k.startswith("sc_")) and v]
     file_name.extend(condtions)
     file_name = "_".join(file_name) + ".csv"
@@ -240,7 +242,8 @@ if __name__ == '__main__':
         "bc_nochase": False,
         "sc_quick_leave_buy_price": False,
         "sc_dumping": True,
-        "sc_4_red": True
+        "sc_4_red": True,
+        "bc_3_model": False,
     }
     config_2 = {
         # "log_open": True,
@@ -253,9 +256,10 @@ if __name__ == '__main__':
         "bc_nochase": False,
         "sc_quick_leave_buy_price": True,
         "sc_dumping": True,
-        "sc_4_red": True
+        "sc_4_red": True,
+        "bc_3_model": False,
     }
-    batch_strage_backtest(ZhuAnStrategy, test_name='不追高', start_date="20250101", end_date="20260417", config_list=[config_1], save_result=True)
+    batch_strage_backtest(ShaoFuStrategy, test_name='异动逻辑', start_date="20260101", end_date="20260417", config_list=[{}], save_result=True)
     # start("002766", start_date="20220101", end_date="20260401")
     # 请确保 data_dir 指向你下载 CSV 的文件夹
     # for config in ZHUAN_BC_CONFIG_LIST:
@@ -265,4 +269,4 @@ if __name__ == '__main__':
     # config={"log_open": True, "bc_raise_active_cap": True, 'bc_no_upper_shadow': True, 'bc_no_lower_shadow': True}
     # config_2["log_open"] = True
     # run_single_stock_backtest(ZhuAnStrategy, "000506", start_date="20250101", end_date="20260417", config=config_2)
-    # run_single_stock_backtest(ZhuAnStrategy, "920642", start_date="20250101", end_date="20260417", config=config_2)
+    # run_single_stock_backtest(ZhuAnStrategy, "300505", start_date="20260101", end_date="20260417", config=config_2, log_detail=True)

@@ -78,6 +78,8 @@ class ZhuAnStrategy(bt.Strategy):
         ('bc_undumping', False), # 非放量出货才买
         ('bc_nochase', False), # 禁止追高
         ('bc_macd_white_0', False), # MACD 白线零轴之上
+        ('bc_3_model', False), # 只做3大定式
+
 
         ('sc_dumping', False), # 放量出货卖出
         ('sc_4_red', False), # 累计4块红砖卖出
@@ -291,7 +293,7 @@ class ZhuAnStrategy(bt.Strategy):
                 is_trend_cont = self._check_trend_cont()    # 升波段延续
 
                 # 只要满足其中一种，且通过了通用的外部过滤（如活跃市值）
-                if not any([is_n_shape, is_flat_jump, is_trend_cont]):
+                if self.params.bc_3_model and not any([is_n_shape, is_flat_jump, is_trend_cont]):
                     return
 
                 # 记录信号日最低价作为后续止损基准
